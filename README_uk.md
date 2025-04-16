@@ -52,7 +52,9 @@ git clone https://github.com/yourusername/custom_mask_splitter.git
 
 ## Ліцензія
 
-[Додайте інформацію про ліцензію]
+Цей проект поширюється під ліцензією GNU General Public License v3.0 - дивіться файл [LICENSE](LICENSE) для деталей.
+
+Це розширення використовує ту ж ліцензію, що й ComfyUI. Воно використовує різні бібліотеки (PyTorch, NumPy, OpenCV, PIL), які сумісні з цією ліцензією.
 
 ## Подяки
 

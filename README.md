@@ -52,7 +52,9 @@ Inserts an image into the white area of a mask, with options for different inter
 
 ## License
 
-[Add license information]
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+This extension follows the same license as ComfyUI. It uses various libraries (PyTorch, NumPy, OpenCV, PIL) that are compatible with this license.
 
 ## Credits
 
