@@ -577,12 +577,111 @@ class WatershedMaskSplitter:
         
         return (final_mask1, final_mask2)
 
+
+class ImageMaskInserter:
+    CATEGORY = "image/masking"
+    
+    @classmethod    
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "mask": ("MASK",),
+                "interpolation": (["LANCZOS4", "LINEAR", "CUBIC", "NEAREST"],),
+            }
+        }
+    
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("result_image",)
+    FUNCTION = "insert_image"
+    
+    def insert_image(self, image, mask, interpolation="LANCZOS4"):
+        """
+        Вставляє зображення у білу область маски, масштабуючи зображення 
+        для точного вписування в розмір білої області.
+        
+        Параметри:
+        image - вхідне зображення (тензор PyTorch, формат RGB)
+        mask - маска з білою областю (тензор PyTorch)
+        interpolation - метод інтерполяції для масштабування зображення
+        
+        Повертає:
+        result_image - результуюче зображення з вставленим контентом
+        """
+        
+        # Перевірка та обробка розмірностей
+        if mask.dim() == 2:
+            mask = torch.unsqueeze(mask, 0)
+        
+        # Створюємо список результуючих зображень
+        result_images = []
+        
+        # Обробляємо кожну маску в батчі
+        for i in range(max(len(image), len(mask))):
+            img = image[i % len(image)]
+            msk = mask[i % len(mask)]
+            
+            # Конвертуємо тензори в numpy масиви для обробки
+            img_np = img.cpu().numpy() * 255
+            img_np = img_np.astype(np.uint8)
+            
+            # Перетворюємо з RGB в BGR для OpenCV
+            img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+            
+            # Конвертуємо маску в numpy масив
+            mask_np = msk.cpu().numpy() * 255
+            mask_np = mask_np.astype(np.uint8)
+            
+            # Знаходимо контури білої області в масці
+            _, thresh = cv2.threshold(mask_np, 200, 255, cv2.THRESH_BINARY)
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # Створюємо результуюче зображення (кольорова версія маски)
+            result = cv2.cvtColor(mask_np, cv2.COLOR_GRAY2BGR)
+            
+            # Якщо контури знайдені
+            if contours:
+                # Беремо найбільший контур (припускаємо, що це наша біла область)
+                largest_contour = max(contours, key=cv2.contourArea)
+                x, y, w, h = cv2.boundingRect(largest_contour)
+                
+                # Вибираємо метод інтерполяції
+                if interpolation == "LANCZOS4":
+                    interp_method = cv2.INTER_LANCZOS4
+                elif interpolation == "LINEAR":
+                    interp_method = cv2.INTER_LINEAR
+                elif interpolation == "CUBIC":
+                    interp_method = cv2.INTER_CUBIC
+                else:
+                    interp_method = cv2.INTER_NEAREST
+                
+                # Змінюємо розмір зображення, щоб воно відповідало розміру білої області
+                if w > 0 and h > 0:  # Перевіряємо, що розміри коректні
+                    resized_source = cv2.resize(img_np, (w, h), interpolation=interp_method)
+                    
+                    # Вставляємо джерельне зображення в білу область
+                    result[y:y+h, x:x+w] = resized_source
+            
+            # Конвертуємо назад у формат RGB для PyTorch
+            result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+            
+            # Нормалізуємо до діапазону [0.0, 1.0] і конвертуємо в тензор
+            result_tensor = torch.from_numpy(result_rgb.astype(np.float32) / 255.0)
+            
+            result_images.append(result_tensor)
+        
+        # Об'єднуємо результати в батч
+        final_image = torch.stack(result_images, dim=0)
+        
+        return (final_image,)
+
 # Реєстрація ноди
 NODE_CLASS_MAPPINGS = {
     "Mask Splitter": MaskSplitter,
     "Push Bubbles To Zones": PushBubblesToZones,
     "Gravity Mask Splitter": GravityMaskSplitter,
     "Watershed Mask Splitter": WatershedMaskSplitter,
+    "Image Mask Inserter": ImageMaskInserter,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -590,4 +689,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Push Bubbles To Zones": "Push Bubbles To Zones",
     "Gravity Mask Splitter": "Gravity Mask Splitter",
     "Watershed Mask Splitter": "Роздільник масок (Водорозділ)",
+    "Image Mask Inserter": "Image Mask Inserter",
 }
